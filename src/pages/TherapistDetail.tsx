@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, Star, Clock, Award, Calendar, Loader2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 
 interface Psychologist {
   id: string;
@@ -27,6 +28,7 @@ export default function TherapistDetail() {
   const { id } = useParams<{ id: string }>();
   const [psychologist, setPsychologist] = useState<Psychologist | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth(); // Get user to check role
 
   useEffect(() => {
     if (id) {
@@ -56,7 +58,6 @@ export default function TherapistDetail() {
       .maybeSingle();
 
     if (data && !error) {
-      // Transform profiles to profile for type compatibility
       const transformed = {
         ...data,
         profile: data.profiles
@@ -96,6 +97,8 @@ export default function TherapistDetail() {
     );
   }
 
+  const isPatient = user?.user_metadata?.role === 'patient';
+
   return (
     <Layout>
       <div className="min-h-screen py-12 gradient-hero">
@@ -114,7 +117,6 @@ export default function TherapistDetail() {
               <Card variant="elevated">
                 <CardContent className="p-8">
                   <div className="flex flex-col sm:flex-row gap-6">
-                    {/* Avatar */}
                     <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-serenica-teal-light to-serenica-lavender-light flex items-center justify-center flex-shrink-0 overflow-hidden shadow-soft">
                       {psychologist.profile?.avatar_url ? (
                         <img
@@ -129,7 +131,6 @@ export default function TherapistDetail() {
                       )}
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1">
                       <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-2">
                         {psychologist.profile?.full_name || 'Therapist'}
@@ -154,7 +155,6 @@ export default function TherapistDetail() {
                         License: {psychologist.license_number}
                       </p>
 
-                      {/* Specializations */}
                       <div className="flex flex-wrap gap-2">
                         {psychologist.specializations?.map((spec, i) => (
                           <Badge
@@ -171,7 +171,6 @@ export default function TherapistDetail() {
                 </CardContent>
               </Card>
 
-              {/* Bio */}
               <Card>
                 <CardContent className="p-8">
                   <h2 className="text-lg font-display font-semibold text-foreground mb-4">
@@ -183,7 +182,6 @@ export default function TherapistDetail() {
                 </CardContent>
               </Card>
 
-              {/* Availability */}
               <Card>
                 <CardContent className="p-8">
                   <h2 className="text-lg font-display font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -214,9 +212,17 @@ export default function TherapistDetail() {
               </Card>
             </div>
 
-            {/* Booking Section */}
+            {/* Booking Section - ONLY FOR PATIENTS */}
             <div>
-              <BookingForm psychologist={psychologist} />
+              {isPatient ? (
+                <BookingForm psychologist={psychologist} />
+              ) : (
+                <Card className="bg-muted/50 border-dashed">
+                  <CardContent className="p-8 text-center text-muted-foreground">
+                    <p>Only patients can book sessions.</p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>

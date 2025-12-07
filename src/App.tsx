@@ -32,6 +32,9 @@ const App = () => (
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/onboarding" element={<TherapistOnboarding />} /> {/* Add Route */}
             <Route path="*" element={<NotFound />} />
+            <Route path="/bookings" element={<Bookings />} />
+            <Route path="/pay/:bookingId" element={<MockPayment />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
