@@ -7,81 +7,36 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const url = new URL(req.url);
     const path = url.pathname.split('/').pop();
-
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get authorization header
-    const authHeader = req.headers.get("authorization");
-    
     if (path === "reserve") {
-      // SOA Task Layer: Orchestrating reservation & payment token generation
       const { psychologistId, scheduledAt, notes } = await req.json();
-
-      if (!psychologistId || !scheduledAt) {
-        return new Response(
-          JSON.stringify({ error: "psychologistId and scheduledAt are required" }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Get user from auth header
-      if (!authHeader) {
-        return new Response(
-          JSON.stringify({ error: "Authorization required" }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const authHeader = req.headers.get("authorization");
+      if (!authHeader) throw new Error("Missing auth header");
 
       const token = authHeader.replace("Bearer ", "");
       const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-      
-      if (authError || !user) {
-        console.error("Auth error:", authError);
-        return new Response(
-          JSON.stringify({ error: "Invalid authorization" }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      if (authError || !user) throw new Error("Invalid token");
 
-      console.log("Creating booking for user:", user.id, "with psychologist:", psychologistId);
-
-      // Check if slot is available (no existing confirmed booking at that time)
+      // Check availability
       const scheduledDate = new Date(scheduledAt);
-      const { data: existingBookings, error: checkError } = await supabase
+      const { data: existing } = await supabase
         .from("bookings")
         .select("id")
         .eq("psychologist_id", psychologistId)
         .eq("scheduled_at", scheduledDate.toISOString())
         .in("status", ["PENDING", "CONFIRMED"]);
 
-      if (checkError) {
-        console.error("Error checking existing bookings:", checkError);
-        throw new Error("Failed to check slot availability");
-      }
+      if (existing?.length) throw new Error("Slot taken");
 
-      if (existingBookings && existingBookings.length > 0) {
-        return new Response(
-          JSON.stringify({ error: "This time slot is no longer available" }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Generate mock payment link (in production, integrate with Stripe/PayPal)
-      const paymentId = crypto.randomUUID().substring(0, 8);
-      const paymentLink = `https://mock-payment-gateway.com/pay/${paymentId}`;
-
-      // Create the booking
+      // Insert Booking
       const { data: booking, error: insertError } = await supabase
         .from("bookings")
         .insert({
@@ -89,81 +44,50 @@ serve(async (req) => {
           psychologist_id: psychologistId,
           scheduled_at: scheduledDate.toISOString(),
           status: "PENDING",
-          payment_link: paymentLink,
           notes: notes || null,
         })
         .select()
         .single();
 
-      if (insertError) {
-        console.error("Error creating booking:", insertError);
-        throw new Error("Failed to create booking");
-      }
+      if (insertError) throw insertError;
 
-      console.log("Booking created successfully:", booking.id);
+      // --- CHANGE START: Generate Internal Link ---
+      // We use the 'origin' header to point back to the frontend (localhost or production)
+      const origin = req.headers.get("origin") || "http://localhost:8080";
+      // We put the booking.id in the URL so the payment page knows what to pay for
+      const paymentLink = `${origin}/pay/${booking.id}`; 
+      
+      // Update the booking with this new link
+      await supabase
+        .from("bookings")
+        .update({ payment_link: paymentLink })
+        .eq("id", booking.id);
+      // --- CHANGE END ---
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          booking: {
-            id: booking.id,
-            status: booking.status,
-            scheduledAt: booking.scheduled_at,
-            paymentUrl: paymentLink,
-          },
-          message: "Booking reserved. Complete payment to confirm.",
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ 
+        success: true, 
+        booking: { ...booking, paymentUrl: paymentLink }, // Return the updated link
+        message: "Booking reserved" 
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     } else if (path === "webhook") {
-      // Handle payment webhook (mock implementation)
+      // Logic to confirm payment
       const { bookingId, paymentStatus } = await req.json();
-
-      if (!bookingId || !paymentStatus) {
-        return new Response(
-          JSON.stringify({ error: "bookingId and paymentStatus are required" }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      console.log("Processing payment webhook for booking:", bookingId, "status:", paymentStatus);
-
       const newStatus = paymentStatus === "success" ? "CONFIRMED" : "CANCELLED";
-
-      const { error: updateError } = await supabase
+      
+      const { error } = await supabase
         .from("bookings")
         .update({ status: newStatus })
         .eq("id", bookingId);
 
-      if (updateError) {
-        console.error("Error updating booking:", updateError);
-        throw new Error("Failed to update booking status");
-      }
+      if (error) throw error;
 
-      console.log("Booking status updated to:", newStatus);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          bookingId,
-          status: newStatus,
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-
-    } else {
-      return new Response(
-        JSON.stringify({ error: "Unknown endpoint" }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-  } catch (error) {
-    console.error("Error in booking function:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Booking operation failed" }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: corsHeaders });
+
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

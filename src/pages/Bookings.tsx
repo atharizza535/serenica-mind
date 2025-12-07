@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, Clock, Loader2, ExternalLink, X } from 'lucide-react';
+import { Calendar, Clock, Loader2, CreditCard, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -105,6 +105,9 @@ export default function Bookings() {
     (b) => b.status === 'CANCELLED' || new Date(b.scheduled_at) < new Date()
   );
 
+  // Check user role
+  const isPatient = user?.user_metadata?.role === 'patient';
+
   return (
     <Layout>
       <div className="min-h-screen py-12 gradient-hero">
@@ -138,11 +141,13 @@ export default function Bookings() {
                     No bookings yet
                   </h3>
                   <p className="text-muted-foreground mb-6">
-                    Book your first session with a therapist.
+                    {isPatient ? "Book your first session with a therapist." : "No upcoming sessions scheduled."}
                   </p>
-                  <Link to="/therapists">
-                    <Button variant="hero">Find a Therapist</Button>
-                  </Link>
+                  {isPatient && (
+                    <Link to="/therapists">
+                      <Button variant="hero">Find a Therapist</Button>
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -183,18 +188,17 @@ export default function Bookings() {
                                 <Badge className={getStatusColor(booking.status)}>
                                   {booking.status}
                                 </Badge>
-                                {booking.status === 'PENDING' && booking.payment_link && (
-                                  <a
-                                    href={booking.payment_link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
+                                
+                                {/* PAY BUTTON: Only visible to PATIENTS if status is PENDING */}
+                                {isPatient && booking.status === 'PENDING' && (
+                                  <Link to={`/pay/${booking.id}`}>
                                     <Button variant="hero" size="sm">
                                       Pay Now
-                                      <ExternalLink className="w-3 h-3 ml-1" />
+                                      <CreditCard className="w-3 h-3 ml-1" />
                                     </Button>
-                                  </a>
+                                  </Link>
                                 )}
+
                                 {booking.status !== 'CANCELLED' && (
                                   <Button
                                     variant="ghost"
