@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client'; // Add this import
 import { Loader2, Brain, Mail, Lock, User, ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
 
@@ -29,7 +30,11 @@ export default function Auth() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Basic redirect if already logged in, but we allow handleSubmit to override specific destinations
     if (user) {
+      // Optional: Add logic here to prevent redirecting if we are about to go to onboarding
+      // For now, we rely on the speed of the handleSubmit logic or a second redirect from home if needed
+      // If this causes issues, you can remove this useEffect and handle redirects solely in handleSubmit
       navigate('/');
     }
   }, [user, navigate]);
@@ -80,9 +85,15 @@ export default function Auth() {
         } else {
           toast({
             title: "Account created!",
-            description: "Welcome to Serenica. You're now signed in.",
+            description: "Welcome to Serenica.",
           });
-          navigate('/');
+          
+          // Redirect logic for Sign Up
+          if (role === 'psychologist') {
+            navigate('/onboarding');
+          } else {
+            navigate('/');
+          }
         }
       } else {
         const { error } = await signIn(email, password);
@@ -97,6 +108,26 @@ export default function Auth() {
             throw error;
           }
         } else {
+          // Check if onboarding is needed for existing psychologists
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          
+          if (currentUser?.user_metadata?.role === 'psychologist') {
+            const { data: psychologist } = await supabase
+              .from('psychologists')
+              .select('id')
+              .eq('profile_id', currentUser.id)
+              .maybeSingle();
+            
+            if (!psychologist) {
+              toast({ 
+                title: "Profile incomplete", 
+                description: "Please complete your therapist profile to appear in search." 
+              });
+              navigate('/onboarding');
+              return; 
+            }
+          }
+
           toast({
             title: "Welcome back!",
             description: "You're now signed in.",
