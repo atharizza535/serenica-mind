@@ -45,13 +45,16 @@ export default function TherapistOnboarding() {
     setIsLoading(true);
 
     try {
+      // Convert comma-separated string to array
+      const specs = formData.specializations.split(',').map(s => s.trim()).filter(Boolean);
+
       const { error } = await supabase.from('psychologists').insert({
         profile_id: user.id,
         license_number: formData.license_number,
         session_fee: parseFloat(formData.session_fee),
-        years_experience: parseInt(formData.years_experience),
+        years_experience: parseInt(formData.years_experience) || 0,
         bio: formData.bio,
-        specializations: formData.specializations.split(',').map(s => s.trim()).filter(Boolean),
+        specializations: specs,
         available_days: formData.available_days
       });
 
@@ -64,9 +67,10 @@ export default function TherapistOnboarding() {
       navigate('/');
 
     } catch (error: any) {
+      console.error('Onboarding error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to save profile.",
         variant: "destructive"
       });
     } finally {
