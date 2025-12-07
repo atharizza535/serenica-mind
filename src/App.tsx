@@ -11,6 +11,7 @@ import Therapists from "./pages/Therapists";
 import TherapistDetail from "./pages/TherapistDetail";
 import Bookings from "./pages/Bookings";
 import NotFound from "./pages/NotFound";
+import TherapistOnboarding from "./pages/TherapistOnboarding";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/journal" element={<Journal />} />
             <Route path="/therapists" element={<Therapists />} />
             <Route path="/therapists/:id" element={<TherapistDetail />} />
+            <Route path="/onboarding" element={<TherapistOnboarding />} />
             <Route path="/bookings" element={<Bookings />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

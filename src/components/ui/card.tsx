@@ -1,10 +1,35 @@
 import * as React from "react";
-
+import { cva, type VariantProps } from "class-variance-authority"; // Import this
 import { cn } from "@/lib/utils";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props} />
-));
+// Define the variants
+const cardVariants = cva(
+  "rounded-lg border bg-card text-card-foreground shadow-sm",
+  {
+    variants: {
+      variant: {
+        default: "",
+        elevated: "shadow-lg border-transparent bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm",
+        glass: "glass border-white/20 shadow-xl", // Uses your .glass class from index.css
+        mood: "gradient-mood border-indigo-100 dark:border-indigo-900/50", // Uses your gradient-mood class
+        interactive: "hover:shadow-md transition-shadow cursor-pointer hover:border-primary/20",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+);
+
+// Update interface to extend VariantProps
+interface CardProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof cardVariants> {}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, variant, ...props }, ref) => (
+    // Apply the variants function
+    <div ref={ref} className={cn(cardVariants({ variant, className }))} {...props} />
+  ),
+);
 Card.displayName = "Card";
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
